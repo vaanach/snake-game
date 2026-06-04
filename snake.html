@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <style>
+        html,body{
+            margin: 0;
+            height: 100%;
+        }
+        body{
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-image: url(grasslily.jpg);
+            
+        }
+        #game{
+            position: relative;
+                align-items: flex-start;
+                display: flex;
+                flex-direction: column;
+        }
+        #scorebox{
+            position:absolute;
+            top:-365px;
+            background-color: burlywood;
+            color: white;
+            padding:5px;
+            
+            left:-150px;
+            
+            border-radius: 5px;
+            border-color: black;
+            border-style: solid;
+             border-width: 2px;
+             width: 280px;
+             height: 40px;
+            }
+        #highscoretxt{
+            font-size: 16px;
+            font-style: bold;
+            font: 1.3em sans-serif;
+            }
+        #scoretxt{
+            font-size: 16px;
+            font: 1em sans-serif;
+            
+        }
+        #gameCanvas{
+            position: absolute;
+            left: -150px; /* X coordinate */
+
+            top: -300px;
+            
+           
+        }
+        #restart{
+            position: absolute;
+            padding: 10px;
+            margin:10px;
+             font-size: 16px;
+             cursor: pointer;
+             left: -160px;
+                top: 0px;
+        }
+    </style>
+</head>
+<body>
+    <div id="game"><div id="scorebox">
+        <div id="highscoretxt">High Score: <span id="highscore">0</span></div>
+
+        <div id="scoretxt">Score: <span id="score">0</span></div>
+        
+    </div>
+
+    <canvas id="gameCanvas" width="300" height="300"></canvas>
+    <button id="restart" style="display:none;">Restart</button></div>
+    
+</body>
+<script>
+
+    canvas=document.getElementById("gameCanvas");
+   const ctx=canvas.getContext("2d");
+   ctx.fillStyle="pink";
+    ctx.strokeStyle = "black";
+    ctx.lineWidth=5;
+    Cw=300;
+    Ch=300;
+   ctx.fillRect(0,0,Cw,Ch);
+  ctx.strokeRect(0,0,Cw,Ch);
+  let snakeX=150;
+  let snakeY=150;
+  let changeX=10;
+  let snakeparHeight=10;
+   let snakeparWidth=10;
+  let snake = [  {x: snakeX, y: snakeY},  {x: snakeX-changeX, y: snakeY},  {x: snakeX-2*changeX, y: snakeY},  {x: snakeX-3*changeX, y: snakeY},  {x: snakeX-4*changeX, y: snakeY},];
+  let dx=changeX;
+  let dy=0;
+  let courtainImg= new Image();
+  function refreshMenuIfNeeded(){
+    if(!GameON){
+      GameMenu();
+    }
+  }
+  courtainImg.onload = refreshMenuIfNeeded;
+  courtainImg.onerror = refreshMenuIfNeeded;
+  courtainImg.src="grasslily.jpg";
+  let playedTimes=0;
+  let score=0;
+  let scorelist=[0];
+  let highScore=0;
+  let courtain1={x:0,y:0};
+  let courtain2={x:150,y:0};
+  let courtains=[courtain1,courtain2];
+  let GameON=false;
+  let gameRunning=false;
+  let gameOverActive=false;
+  let loopTimeoutId=null;
+  let courtainAnimTimeoutId=null;
+  let foodX=0;
+  let foodY=0;
+  const restartBtn = document.getElementById('restart');
+  restartBtn.addEventListener('click', restarartGame);
+
+  function drawCourtain(courtainPos){
+    if(courtainImg.complete && courtainImg.naturalWidth > 0){
+      ctx.drawImage(courtainImg,courtainPos.x,courtainPos.y,Cw/2,Ch);
+    } else {
+      ctx.fillStyle = '#2d5a27';
+      ctx.fillRect(courtainPos.x, courtainPos.y, Cw/2, Ch);
+    }
+  }
+  
+ function drawCourtains(){
+    courtains.forEach(drawCourtain);
+  }
+  function drawTextOnCourtains(text, y){
+    ctx.font = '20px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'white';
+    ctx.strokeStyle = 'black';
+    ctx.lineWidth = 3;
+    const x = canvas.width / 2;
+    ctx.strokeText(text, x, y);
+    ctx.fillText(text, x, y);
+    ctx.textAlign = 'left';
+  }
+  function drawSnakePart(snakePart){
+    ctx.fillStyle="lightgreen";
+    ctx.strokeStyle = "darkgreen";
+    ctx.lineWidth=1;
+    ctx.fillRect(snakePart.x, snakePart.y, snakeparWidth, snakeparHeight);
+    ctx.strokeRect(snakePart.x, snakePart.y, snakeparWidth, snakeparHeight);
+  }
+  
+  function stopCourtainAnim(){
+    if(courtainAnimTimeoutId!==null){
+      clearTimeout(courtainAnimTimeoutId);
+      courtainAnimTimeoutId=null;
+    }
+  }
+
+  function resetCourtainsClosed(){
+    courtain1.x=0;
+    courtain2.x=150;
+  }
+
+  function resetCourtainsOpen(){
+    courtain1.x=-150;
+    courtain2.x=300;
+  }
+
+  function curtainsAreOpen(){
+    return courtain1.x<=-150 && courtain2.x>=300;
+  }
+
+  function curtainsAreClosed(){
+    return courtain1.x>=0 && courtain2.x<=150;
+  }
+
+  function openCourtainsStep(){
+    if(courtain1.x>-150) courtain1.x=Math.max(-150, courtain1.x-10);
+    if(courtain2.x<300) courtain2.x=Math.min(300, courtain2.x+10);
+  }
+
+  function closeCourtainsStep(){
+    if(courtain1.x<0) courtain1.x=Math.min(0, courtain1.x+10);
+    if(courtain2.x>150) courtain2.x=Math.max(150, courtain2.x-10);
+  }
+
+  function courtainAnimLoop(mode, onComplete){
+    stopCourtainAnim();
+    function tick(){
+      clearCanvas();
+      if(mode==='open'){
+        openCourtainsStep();
+      } else {
+        closeCourtainsStep();
+      }
+      drawCourtains();
+      const done=mode==='open' ? curtainsAreOpen() : curtainsAreClosed();
+      if(done){
+        stopCourtainAnim();
+        if(onComplete) onComplete();
+        return;
+      }
+      courtainAnimTimeoutId=setTimeout(tick, 100);
+    }
+    tick();
+  }
+
+  function drawSnake(){
+    snake.forEach(drawSnakePart);
+  }
+
+  
+  function stopGameLoop(){
+    gameRunning=false;
+    if(loopTimeoutId!==null){
+      clearTimeout(loopTimeoutId);
+      loopTimeoutId=null;
+    }
+    stopCourtainAnim();
+  }
+
+  function SnakeShift(){
+    const head={x:snake[0].x+dx,y:snake[0].y+dy};
+    const didEatFood=head.x===foodX && head.y===foodY;
+    snake.unshift(head);
+    if(didEatFood){
+        createFood();
+        score++;
+        document.getElementById("score").innerText=score;
+     if(isHighScore()){
+        highScore=score;
+        document.getElementById("highscore").innerText=highScore;
+     }
+    }
+    else{
+        snake.pop();
+    }
+  }
+  function clearCanvas(){
+     ctx.fillStyle = "pink";  ctx.strokeStyle = "black";
+     ctx.fillRect(0, 0, canvas.width, canvas.height);
+     ctx.strokeRect(0, 0, canvas.width, canvas.height);
+  }
+
+function changeDirection(event) {
+       if(!GameON || !gameRunning) return;
+       const LEFT_KEY = 37;
+     const RIGHT_KEY = 39;
+      const UP_KEY = 38;
+       const DOWN_KEY = 40;
+       const keyPressed=event.keyCode;
+       const goingUp = dy === -10; 
+        const goingDown = dy === 10;  
+        const goingRight = dx === 10; 
+        const goingLeft = dx === -10;
+        if(keyPressed==RIGHT_KEY && !goingLeft){
+            dx=10;
+            dy=0;
+        }
+        else if(keyPressed==LEFT_KEY && !goingRight){
+            dx=-10;
+            dy=0;
+        }
+        else if(keyPressed==UP_KEY && !goingDown){
+            dx=0;
+            dy=-10;
+        }
+        else if(keyPressed==DOWN_KEY && !goingUp){
+            dx=0;
+            dy=10;
+        }
+        if(keyPressed===LEFT_KEY || keyPressed===RIGHT_KEY || keyPressed===UP_KEY || keyPressed===DOWN_KEY){
+            event.preventDefault();
+        }
+
+    }
+    function randomTen(min,max){
+        return Math.round((Math.random()*(max-min)+min)/10)*10;
+    }
+    function isHighScore(){
+        if(score>highScore){
+            return true;
+        }
+        else{
+            return false;
+        }
+    }
+    
+    function createFood() {
+        let placed=false;
+        while(!placed){
+          foodX = randomTen(0, canvas.width - 10);
+          foodY = randomTen(0, canvas.height - 10);
+          placed = !snake.some(part => part.x === foodX && part.y === foodY);
+        }
+          }
+          function drawFood(){
+            ctx.fillStyle = 'red';  
+             ctx.strokeStyle = 'darkred';  
+              ctx.fillRect(foodX, foodY, 10, 10);  
+               ctx.strokeRect(foodX, foodY, 10, 10);
+          }
+          function GameMenu(){
+            resetCourtainsClosed();
+            clearCanvas();
+            drawCourtains();
+            drawTextOnCourtains('Press Any Key To Start', 150);
+          }
+          function GameStart(event){
+            if(!GameON && !gameOverActive && event.keyCode){
+                gameload();
+            }
+          }
+          function gameload(){
+            stopGameLoop();
+            gameOverActive=false;
+            GameON=true;
+            gameRunning=false;
+            courtainAnimLoop('open', function(){
+              clearCanvas();
+              gameRunning=true;
+              gameLoop();
+            });
+          }
+    
+    function didGameEnd() {
+        const head = snake[0];
+        if (head.x < 0 || head.x >= canvas.width || head.y < 0 || head.y >= canvas.height) return true;
+         for (let i = 1; i < snake.length; i++) {
+            if (snake[i].x === head.x && snake[i].y === head.y) return true;
+         }
+             return false;
+         }
+         function restarartGame(){
+            stopGameLoop();
+            gameOverActive=false;
+            snake = [  {x: 150, y: 150},  {x: 140, y: 150},  {x: 130, y: 150},  {x: 120, y: 150},  {x: 110, y: 150},];
+            dx=10;
+            dy=0;
+            score=0;
+            document.getElementById("score").innerText=score;
+            restartBtn.style.display = 'none';
+            resetCourtainsOpen();
+            GameON=true;
+            gameRunning=true;
+            createFood();
+            gameLoop();
+         }
+         function gameOver() {
+                gameOverActive=true;
+                gameRunning=false;
+                if(loopTimeoutId!==null){
+                  clearTimeout(loopTimeoutId);
+                  loopTimeoutId=null;
+                }
+                GameON=false;
+                courtainAnimLoop('close', function(){
+                  drawCourtains();
+                  drawTextOnCourtains('Game Over!', 150);
+                  if(score==highScore && score!=0 ){
+                    drawTextOnCourtains('New High Score: ' + highScore, 180);
+                  }
+                  restartBtn.style.display = 'block';
+                });
+              }
+              function gameLoop(){
+            if(!gameRunning) return;
+            loopTimeoutId=setTimeout(function onTick(){
+                    if(!gameRunning) return;
+                    clearCanvas();
+                    drawFood();
+                    SnakeShift();
+                    drawSnake();
+                    if(didGameEnd()){
+                        gameOver();
+                        return;
+                    }
+                    gameLoop();
+                },100);}
+              
+ function main(){
+    //onload=function GameMenu(){
+      //  drawCourtains();
+        //ctx.fillText('Press Any Key To Start', 50, 150);
+     if(!GameON){
+        GameMenu();
+        return;
+        
+     }
+     
+       gameLoop(); 
+    
+    
+}
+        document.addEventListener("keydown", function(event){
+          if(gameOverActive) return;
+          if(!GameON){
+            GameStart(event);
+          } else if(gameRunning){
+            changeDirection(event);
+          }
+        });
+createFood();
+main();
+if(courtainImg.complete && !GameON){
+  GameMenu();
+}
+
+  </script>
+</html>
